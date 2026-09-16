@@ -161,3 +161,54 @@ def test_non_integer_bells_rejected():
         json={"bells": 4.5, "repeats": 1, "block": [[2, 1, 3, 4]]},
     )
     assert resp.status_code == 422
+
+
+def test_string_bells_in_row_rejected():
+    resp = client.post(
+        "/api/verify",
+        json={"bells": 4, "repeats": 2, "block": [["2", "1", "3", "4"]]},
+    )
+    assert resp.status_code == 422
+    err = resp.json()["error"]
+    assert err["field"] == "block[0]"
+
+
+def test_float_bells_in_row_rejected():
+    resp = client.post(
+        "/api/verify",
+        json={"bells": 4, "repeats": 2, "block": [[2.0, 1, 3, 4]]},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["field"] == "block[0]"
+
+
+def test_boolean_bell_in_row_rejected():
+    # bool is an int subclass in Python; JSON true must not be accepted as 1.
+    resp = client.post(
+        "/api/verify",
+        json={"bells": 4, "repeats": 2, "block": [[True, 2, 3, 4]]},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["field"] == "block[0]"
+
+
+def test_non_integer_locates_first_bad_row():
+    resp = client.post(
+        "/api/verify",
+        json={
+            "bells": 4,
+            "repeats": 2,
+            "block": [[2, 1, 3, 4], [2, 1, 3, "4"]],
+        },
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["field"] == "block[1]"
+
+
+def test_non_list_row_rejected():
+    resp = client.post(
+        "/api/verify",
+        json={"bells": 4, "repeats": 2, "block": ["2134"]},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["field"] == "block[0]"

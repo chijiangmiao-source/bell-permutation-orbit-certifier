@@ -34,6 +34,62 @@ class VerifyRequest(BaseModel):
         min_length=MIN_BLOCK_SIZE, max_length=MAX_BLOCK_SIZE
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_non_integer_bells(cls, data: object) -> object:
+        """Inspect raw JSON before int coercion.
+
+        Pydantic's plain ``int`` accepts numeric strings and floats; change
+        rows must be exact JSON integers.  ``type(x) is int`` also rejects
+        booleans (which are an ``int`` subclass in Python).  Errors point at
+        the first offending row, block[i].
+        """
+        if not isinstance(data, dict):
+            return data
+        bells = data.get("bells")
+        block = data.get("block")
+        # Only run when bells itself is a genuine integer; otherwise the
+        # scalar field error takes precedence.
+        if type(bells) is not int or not isinstance(block, list):
+            return data
+        errors: list[InitErrorDetails] = []
+        for index, row in enumerate(block):
+            if not isinstance(row, list):
+                errors.append(
+                    InitErrorDetails(
+                        type="value_error",
+                        loc=("block", index),
+                        ctx={
+                            "error": ValueError(
+                                f"block[{index}] must be a list of integers"
+                            )
+                        },
+                    )
+                )
+                break
+            for value in row:
+                if type(value) is not int:
+                    errors.append(
+                        InitErrorDetails(
+                            type="value_error",
+                            loc=("block", index),
+                            ctx={
+                                "error": ValueError(
+                                    f"block[{index}] must contain only JSON "
+                                    f"integers, found {value!r}"
+                                )
+                            },
+                        )
+                    )
+                    break
+            if errors:
+                break
+        if errors:
+            raise ValidationError.from_exception_data(
+                cls.__name__, errors
+            )
+        return data
+
     @model_validator(mode="after")
     def _validate_block_rows(self) -> "VerifyRequest":
         required = set(range(1, self.bells + 1))
