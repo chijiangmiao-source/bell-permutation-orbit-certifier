@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      API_PORT: "8000"
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  web:
+    build:
+      context: ./frontend
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+  # Canonical test judge inside the same image family:
+  #   docker compose run --rm verify
+  verify:
+    profiles: ["verify"]
+    build:
+      context: ./backend
+    command: ["python", "-m", "pytest", "tests", "-q"]
